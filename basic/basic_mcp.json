@@ -1,0 +1,10 @@
+{
+    "servers": {
+        "test-mcp": {
+            "command": "python",
+            "args": [
+                "C:\\Users\\lilia\\Desktop\\Projects\\Python-Lab\\basic_server.py"
+            ]
+        }
+    }
+}

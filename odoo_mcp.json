@@ -1,0 +1,19 @@
+{
+    "mcpServers": {
+        "odoo-manager": {
+            "command": "python",
+            "args": [
+                "odoo_mcp_server.py"
+            ],
+            "cwd": "c:\\Users\\lilia\\Desktop\\Projects\\Python-Lab",
+            "env": {
+                "ODOO_URL": "",
+                "ODOO_CLIENT_ID": "",
+                "ODOO_CLIENT_SECRET": "",
+                "TOKEN_PATH": "",
+                "SEARCH_PATH": "",
+                "CREATE_PATH": ""
+            }
+        }
+    }
+}

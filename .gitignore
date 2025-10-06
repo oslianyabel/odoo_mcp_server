@@ -1,0 +1,6 @@
+.env
+venv/
+context/
+__pycache__/
+agents.md
+openai_client.py
