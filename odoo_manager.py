@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import logging
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional
@@ -10,6 +11,9 @@ import aiohttp
 from aiohttp import BasicAuth
 
 from config import config
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 
 class OdooHttpException(Exception):
@@ -46,7 +50,7 @@ class OdooClient:
         msg = f"URL: {url}\n"
         msg += f"headers: {headers}\n"
         msg += f"params: {params}\n"
-        print(f"Get http request\n{msg}")
+        logger.debug(f"Get http request\n{msg}")
         async with aiohttp.ClientSession() as session:
             args = {"url": url, "headers": headers, "params": params}
 
@@ -56,41 +60,41 @@ class OdooClient:
                 else:
                     # Await the response body so logs/exceptions contain the real error text
                     body = await response.text()
-                    print(f"Odoo HTTP GET error {response.status}: {body}")
+                    logger.error(f"Odoo HTTP GET error {response.status}: {body}")
                     raise OdooHttpException(f"{response.status}: {body}")
 
     async def http_post_json(self, url, headers, json):
         msg = f"URL: {url}\n"
         msg += f"headers: {headers}\n"
         msg += f"json: {json}\n"
-        print(f"Post http request\n{msg}")
+        logger.debug(f"Post http request\n{msg}")
         async with aiohttp.ClientSession() as session:
             args = {"url": url, "headers": headers, "json": json}
 
             async with session.post(**args) as response:
-                print(response.status)
+                logger.debug(f"Response status: {response.status}")
                 if response.ok:
                     return await response.json()
                 else:
                     body = await response.text()
-                    print(f"Odoo HTTP POST JSON error {response.status}: {body}")
+                    logger.error(f"Odoo HTTP POST JSON error {response.status}: {body}")
                     raise OdooHttpException(f"{response.status}: {body}")
 
     async def http_post_data(self, url, headers, data):
         msg = f"URL: {url}\n"
         msg += f"headers: {headers}\n"
         msg += f"data: {data}\n"
-        print(f"Post http request\n{msg}")
+        logger.debug(f"Post http request\n{msg}")
         async with aiohttp.ClientSession() as session:
             args = {"url": url, "headers": headers, "data": data}
 
             async with session.post(**args) as response:
-                print(f"status code: {response.status}")
+                logger.debug(f"status code: {response.status}")
                 if response.ok:
                     return await response.json()
                 else:
                     body = await response.text()
-                    print(f"Odoo HTTP POST DATA error {response.status}: {body}")
+                    logger.error(f"Odoo HTTP POST DATA error {response.status}: {body}")
                     raise OdooHttpException(f"{response.status}: {body}")
 
     async def http_post_auth(self, url, data, auth):
@@ -122,7 +126,7 @@ class OdooClient:
                         seconds=expires_in
                     )
 
-                    print(
+                    logger.info(
                         f"Token obtenido exitosamente. Expira en: {self.__token_expires_at}"
                     )
                     return access_token
@@ -153,7 +157,7 @@ class OdooClient:
             Exception: If unable to obtain a valid token
         """
         if self._is_token_expired():
-            print("Token expirado o próximo a expirar, renovando...")
+            logger.info("Token expirado o próximo a expirar, renovando...")
             await self.get_oauth_token()
 
         if not self.__access_token:
@@ -167,7 +171,7 @@ class OdooClient:
         Returns:
             str: Access token
         """
-        print("Obteniendo nuevo token de Odoo...")
+        logger.info("Obteniendo nuevo token de Odoo...")
         data = {"grant_type": "client_credentials"}
         auth = BasicAuth(self.__CLIENT_ID, self.__CLIENT_SECRET)
         return await self.http_post_auth(self.__TOKEN_URL, data, auth)
@@ -216,7 +220,7 @@ class OdooClient:
                     or "token_expired" in error_msg
                 ):
                     if attempt < max_retries - 1:
-                        print(
+                        logger.warning(
                             f"Token inválido detectado, renovando... (intento {attempt + 1})"
                         )
                         # Force token renewal
@@ -224,7 +228,7 @@ class OdooClient:
                         self.__token_expires_at = None
                         continue
                     else:
-                        print(
+                        logger.error(
                             "Falló la renovación del token después de múltiples intentos"
                         )
                         raise Exception(f"Error de autenticación persistente: {e}")
@@ -409,19 +413,19 @@ class OdooManager(OdooClient):
         if partners:
             return partners[0]
 
-        print(f"No se encontró ningún partner con el teléfono {phone}")
+        logger.warning(f"No se encontró ningún partner con el teléfono {phone}")
         return None
 
     async def get_partner_by_id(self, id):
-        print(f"get_partner_by_id {id}")
+        logger.debug(f"get_partner_by_id {id}")
         return await self.get_partner(id=id)
 
     async def get_partner_by_phone(self, phone):
-        print(f"get_partner_by_phone {phone}")
+        logger.debug(f"get_partner_by_phone {phone}")
         return await self.get_partner(phone=phone)
 
     async def get_partner_by_email(self, email):
-        print(f"get_partner_by_email {email}")
+        logger.debug(f"get_partner_by_email {email}")
         return await self.get_partner(email=email)
 
     async def get_product(
@@ -455,16 +459,16 @@ class OdooManager(OdooClient):
 
     async def download_image(self, image_base64, sku):
         if not image_base64:
-            print(f"La imagen del producto con sku {sku} no existe")
+            logger.warning(f"La imagen del producto con sku {sku} no existe")
             return
 
-        print(f"Descargando imagen del producto con sku {sku}...")
+        logger.info(f"Descargando imagen del producto con sku {sku}...")
         image_binary = base64.b64decode(image_base64)
         path = f"static/images/{sku}.jpg"
         async with aiofiles.open(path, "wb") as f:
             await f.write(image_binary)
 
-        print(f"Imagen descargada y guardada en {path}")
+        logger.info(f"Imagen descargada y guardada en {path}")
         return path
 
     async def get_all_products(self) -> list[dict] | None:
@@ -493,7 +497,7 @@ class OdooManager(OdooClient):
                 results.append(p)
                 default_code_list.append(p["default_code"])
 
-        print(f"Se encontraron {len(results)} productos")
+        logger.info(f"Se encontraron {len(results)} productos")
         return results
 
     async def create_attachment(
@@ -517,7 +521,7 @@ class OdooManager(OdooClient):
                 }
             ]
         )
-        print(
+        logger.info(
             f"Creating attachment name={name} model={res_model} res_id={res_id} size={len(datas_b64)}b64"
         )
         return await self.create_odoo("ir.attachment", args)
@@ -604,7 +608,7 @@ class OdooManager(OdooClient):
 
         sale_orders = await self.fetch_odoo("sale.order", fields, domain)
         if sale_orders:
-            print(f"Se encontraron {len(sale_orders)} pedidos")
+            logger.info(f"Se encontraron {len(sale_orders)} pedidos")
             results = []
             for sale_order in sale_orders:
                 link = config.ODOO_URL + str(sale_order["access_url"])
@@ -616,7 +620,7 @@ class OdooManager(OdooClient):
 
             return results
 
-        print(f"No se encontraron pedidos con nombre: {name}")
+        logger.warning(f"No se encontraron pedidos con nombre: {name}")
         return None
 
     async def get_sale_orders_by_marketplace(self, marketplace) -> list[dict] | None:
@@ -634,7 +638,7 @@ class OdooManager(OdooClient):
         if real_order and real_order["partner_id"][0] == partner_id:  # type: ignore
             return order
 
-        print(
+        logger.warning(
             f"No se pudo verificar que el pedido {order['name']} pertenece al usuario"
         )
         return None
@@ -692,13 +696,13 @@ class OdooManager(OdooClient):
         )
 
         lead_info = await self.create_odoo("crm.lead", args)
-        print(f"Lead creado: {lead_info}")
+        logger.info(f"Lead creado: {lead_info}")
         return lead_info
 
     async def create_partner(self, name, phone, email=None) -> tuple[dict | None, str]:
         partner = await self.get_partner_by_phone(phone)
         if partner:
-            print(f"Partner found: {partner}")
+            logger.info(f"Partner found: {partner}")
             return partner, "ALREADY"
 
         args = [{}]
@@ -710,14 +714,14 @@ class OdooManager(OdooClient):
         await self.create_odoo("res.partner", json.dumps(args))
         partner = await self.get_partner_by_phone(phone)
         if partner:
-            print(f"Partner created: {partner}")
+            logger.info(f"Partner created: {partner}")
             return partner, "CREATE"
 
-        print(f"Error asignando teléfono {phone} al nuevo partner {name}")
+        logger.error(f"Error asignando teléfono {phone} al nuevo partner {name}")
         return None, "ERROR"
 
     async def create_sale_order(self, partner_id, order_line) -> int:
-        print("Creando pedido...")
+        logger.info("Creando pedido...")
         order_line_commands = [(0, 0, line) for line in order_line]
         args = json.dumps(
             [
@@ -731,20 +735,20 @@ class OdooManager(OdooClient):
         )
 
         sale_order = await self.create_odoo("sale.order", args)
-        print(f"Pedido creado: {sale_order}")
+        logger.info(f"Pedido creado: {sale_order}")
         return sale_order
 
     async def create_order_line(self, products):
-        print("Creating order lines...")
+        logger.info("Creating order lines...")
         order_line = []
         try:
             for p in products:
                 odoo_product = await self.get_product_by_sku(p["default_code"])
                 if not odoo_product:
-                    print(f"Product with sku {p['default_code']} not exists")
+                    logger.warning(f"Product with sku {p['default_code']} not exists")
                     continue
                 if odoo_product["qty_available"] < 1:
-                    print(
+                    logger.warning(
                         f"product {p['name']} with sku: {p['default_code']} out of stock"
                     )
                     continue
@@ -757,11 +761,11 @@ class OdooManager(OdooClient):
                     }
                 )
                 # end for
-            print(f"Order lines created: {order_line}")
+            logger.info(f"Order lines created: {order_line}")
             return order_line
 
         except Exception as exc:
-            print(f"Error creating order lines: {str(exc)}")
+            logger.error(f"Error creating order lines: {str(exc)}")
             return False
 
     async def get_children_ids(self, category_id):
@@ -772,12 +776,12 @@ class OdooManager(OdooClient):
             if child["child_id"]:
                 children += await self.get_categories_children(child["id"])
 
-        print(f"category_id {category_id} tiene {len(children)} categorías hijas")
+        logger.debug(f"category_id {category_id} tiene {len(children)} categorías hijas")
         return children_ids
 
     async def get_products_by_category_name(self, category_name):
         # return {'category_name': [products], ...}
-        print(f"get_products_by_category_name({category_name})")
+        logger.debug(f"get_products_by_category_name({category_name})")
 
         category_id_list = await self.get_categories_by_name(category_name)
         ans = {}
@@ -788,7 +792,7 @@ class OdooManager(OdooClient):
         return ans
 
     async def get_products_by_category_id(self, category_id) -> list[dict]:
-        print(f"get_products_by_category_id({category_id})")
+        logger.debug(f"get_products_by_category_id({category_id})")
 
         fields = self.product_fields
         category_id_list = await self.get_children_ids(category_id)
@@ -802,7 +806,7 @@ class OdooManager(OdooClient):
             product_data += r
 
         if product_data:
-            print(f"{len(product_data)} productos encontrados")
+            logger.info(f"{len(product_data)} productos encontrados")
             return product_data
 
         return []
@@ -828,23 +832,23 @@ class OdooManager(OdooClient):
         return []
 
     async def get_category_by_id(self, id):
-        print(f"get_category_by_id({id})")
+        logger.debug(f"get_category_by_id({id})")
         return await self.get_categories(id=id)
 
     async def get_categories_by_name(self, name):
-        print(f"get_categories_by_name({name})")
+        logger.debug(f"get_categories_by_name({name})")
         return await self.get_categories(name=name)
 
     async def get_categories_children(self, parent_id):
-        print(f"get_categories_children({parent_id})")
+        logger.debug(f"get_categories_children({parent_id})")
         return await self.get_categories(parent_id=parent_id)
 
     async def get_category_parent(self, child_id):
-        print(f"get_category_parent({child_id})")
+        logger.debug(f"get_category_parent({child_id})")
         return await self.get_categories(child_id=child_id)
 
     async def get_all_categories(self):
-        print("get_all_categories()")
+        logger.debug("get_all_categories()")
         return await self.get_categories()
 
     async def get_images_by_product_id(self, product_id, product_sku) -> list[str]:
@@ -868,7 +872,7 @@ class OdooManager(OdooClient):
                     return []
         except OdooHttpException as exc:
             # Si el modelo product.image no existe en esta DB, intentar fallback
-            print(
+            logger.warning(
                 f"Error fetching product images from Odoo for product_id {product_id}: {exc}"
             )
             try:
@@ -894,7 +898,7 @@ class OdooManager(OdooClient):
                     return images_path
 
             except Exception as exc2:
-                print(f"Fallback fetch failed for product_id {product_id}: {exc2}")
+                logger.error(f"Fallback fetch failed for product_id {product_id}: {exc2}")
 
             return []
 
@@ -1052,7 +1056,7 @@ class OdooManager(OdooClient):
         self, partner_id: int, product_id: int, quantity: int = 1
     ) -> dict:
         """Create a sale order with a single product by product ID."""
-        print(f"Creating sale order for partner {partner_id} with product {product_id}")
+        logger.info(f"Creating sale order for partner {partner_id} with product {product_id}")
 
         # Get product details to validate it exists
         product = await self.get_product_by_id(product_id)
@@ -1113,7 +1117,7 @@ class OdooManager(OdooClient):
                 )
                 return groups or None
             except OdooHttpException:
-                print("No replenishment models available in this Odoo instance")
+                logger.warning("No replenishment models available in this Odoo instance")
                 return None
 
 
@@ -1122,6 +1126,6 @@ odoo_manager = OdooManager()
 if __name__ == "__main__":
 
     async def main():
-        print(await odoo_manager.get_oauth_token())
+        logger.info(await odoo_manager.get_oauth_token())
 
     asyncio.run(main())
